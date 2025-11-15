@@ -1,0 +1,6 @@
+# Exclude Jupyter notebooks from GitHub language statistics
+*.ipynb linguist-vendored
+
+# Ensure Python files are properly recognized
+*.py linguist-detectable=true
+

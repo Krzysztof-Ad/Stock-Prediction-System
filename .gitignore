@@ -77,7 +77,6 @@ target/
 
 # Jupyter Notebook
 .ipynb_checkpoints
-*.ipynb linguist-vendored
 
 # IPython
 profile_default/
