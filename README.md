@@ -13,23 +13,17 @@ The main objective is to build a complete system that:
 1.  Fetches and processes financial data using `yfinance` and `pandas`.
 2.  Trains a machine learning model (`scikit-learn`) to predict price direction (Up/Down).
 3.  Serves this model's predictions via a simple REST API (using `Flask`).
-4.  (Future) Includes basic user authentication and portfolio tracking.
 
-## Tech Stack
+## Current Focus & Achievements
 
-* **Python 3.11** (Managed via `venv`)
-* **Data Science:** Pandas, NumPy, Scikit-learn
-* **Data Retrieval:** yfinance
-* **Backend API:** Flask
-* **Database:** Flask-SQLAlchemy (with SQLite for development)
+We are currently in **Phase 1: Data Universe (ETL pipeline)**:
 
-## Current Focus & Next Steps
+* [x] Setup PostgreSQL + TimescaleDB using Docker.
 
-We are currently in **Phase 1: ML Prototyping**.
+* [x] Build etl_pipeline to fetch S&P 500 tickers (from Wikipedia).
 
-The immediate goal is to develop and validate the core prediction model in a Jupyter Notebook.
+* [x] Build ETL script to download and store all historical OHLCV data.
 
-* [ ] **Data Acquisition:** Fetch historical data for a sample ticker (e.g., `MSFT`).
-* [ ] **Feature Engineering:** Create technical indicators to use as features (e.g., Moving Averages, RSI).
-* [ ] **Initial Model:** Train a baseline model (like `RandomForestClassifier`).
-* [ ] **Validation:** Properly evaluate the model using time-series-aware cross-validation (e.g., `TimeSeriesSplit`).
+* [ ] Add macro data extractor.
+
+* [ ] Add news/sentiment data extractor (NewsAPI).
