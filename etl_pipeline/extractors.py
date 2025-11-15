@@ -1,5 +1,7 @@
 import pandas as pd
 import requests
+import yfinance as yf
+from tqdm import tqdm
 from io import StringIO
 
 
@@ -50,5 +52,45 @@ def get_sp500_tickers():
         print(f"ERROR while getting sp500 tickers from Wikipedia: {e}")
         return []
 
+def fetch_stock_data(ticker_list):
+    print("Downloading historical data (may take a while)...")
+    batch_size = 50
+    all_batches = []
 
-print(get_sp500_tickers()[:5])
+    for i in tqdm(range(0, len(ticker_list), batch_size), desc="Downloading batches"):
+        batch = ticker_list[i:i+batch_size]
+        for attempt in range(3):
+            try:
+                batch_data = yf.download(batch, period='max', interval='1d', auto_adjust=True)
+                all_batches.append(batch_data)
+                break
+            except Exception as e:
+                print(f"Error downloading batch {i // batch_size + 1}, attempt {attempt + 1}: {e}")
+                if attempt == 2:
+                    print("Skipping this batch after 3 failed attempts.")
+
+    if not all_batches:
+        print("No data was downloaded. Exiting.")
+        return pd.DataFrame()
+
+    return pd.concat(all_batches, axis=1)
+
+def get_macro_tickers():
+    macro_tickers = {
+        '^VIX': 'Volatility Index',
+        '^TNX': '10-Year Treasury Yield',
+        'CL=F': 'Crude Oil',
+        'GC=F': 'Gold',
+        'EURUSD=X': 'EUR/USD Exchange Rate',
+        'JPY=X': 'USD/JPY Exchange Rate'
+    }
+    return macro_tickers
+
+def fetch_macro_data(macro_ticker_list):
+    print(f"Fetching macro data for {', '.join(macro_ticker_list)}...")
+    try:
+        data = yf.download(macro_ticker_list, period='max', interval='1d')['Close']
+        return data
+    except Exception as e:
+        print(f"ERROR while fetching macro data: {e}")
+        return pd.DataFrame()

@@ -24,6 +24,6 @@ We are currently in **Phase 1: Data Universe (ETL pipeline)**:
 
 * [x] Build ETL script to download and store all historical OHLCV data.
 
-* [ ] Add macro data extractor.
+* [x] Add macro data extractor.
 
 * [ ] Add news/sentiment data extractor (NewsAPI).

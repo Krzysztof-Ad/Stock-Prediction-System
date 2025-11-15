@@ -23,7 +23,8 @@ def create_tables():
             id SERIAL PRIMARY KEY,
             ticker VARCHAR(10) UNIQUE NOT NULL,
             company_name VARCHAR(255),
-            sector VARCHAR(100)
+            sector VARCHAR(100),
+            industry VARCHAR(255)
         );
         """))
 
@@ -36,6 +37,7 @@ def create_tables():
         low DOUBLE PRECISION,
         close DOUBLE PRECISION,
         volume BIGINT,
+        PRIMARY KEY (time, symbol_id),
         CONSTRAINT fk_symbol FOREIGN KEY (symbol_id) REFERENCES symbols(id)
         );
         """))
@@ -45,3 +47,20 @@ def create_tables():
         ))
 
     print("Tables created successfully!")
+
+def create_macro_table():
+    with engine.begin() as connection:
+        connection.execute(text("""
+            CREATE TABLE IF NOT EXISTS macro_data_daily (
+                time TIMESTAMPTZ NOT NULL,
+                ticker VARCHAR(20) NOT NULL,
+                close DOUBLE PRECISION,
+                PRIMARY KEY (time, ticker)
+            );
+        """))
+
+        connection.execute(text(
+            "SELECT create_hypertable('macro_data_daily', 'time', if_not_exists => TRUE);"
+        ))
+
+    print("Table 'macro_data_daily' created successfully!")
