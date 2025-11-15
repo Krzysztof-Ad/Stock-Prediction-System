@@ -3,6 +3,8 @@ import requests
 import yfinance as yf
 from tqdm import tqdm
 from io import StringIO
+import feedparser
+from time import mktime
 
 
 def clean_sp500_data(records):
@@ -52,16 +54,25 @@ def get_sp500_tickers():
         print(f"ERROR while getting sp500 tickers from Wikipedia: {e}")
         return []
 
-def fetch_stock_data(ticker_list):
+def fetch_stock_data(ticker_list, start_date=None):
     print("Downloading historical data (may take a while)...")
     batch_size = 50
     all_batches = []
+
+    download_params = {
+        'interval': '1d',
+        'auto_adjust': True
+    }
+    if start_date:
+        download_params['start'] = start_date
+    else:
+        download_params['period'] = 'max'
 
     for i in tqdm(range(0, len(ticker_list), batch_size), desc="Downloading batches"):
         batch = ticker_list[i:i+batch_size]
         for attempt in range(3):
             try:
-                batch_data = yf.download(batch, period='max', interval='1d', auto_adjust=True)
+                batch_data = yf.download(batch, **download_params)
                 all_batches.append(batch_data)
                 break
             except Exception as e:
@@ -86,11 +97,65 @@ def get_macro_tickers():
     }
     return macro_tickers
 
-def fetch_macro_data(macro_ticker_list):
+def fetch_macro_data(macro_ticker_list, start_date=None):
     print(f"Fetching macro data for {', '.join(macro_ticker_list)}...")
+
+    download_params = {
+        'interval': '1d'
+    }
+    if start_date:
+        download_params['start'] = start_date
+    else:
+        download_params['period'] = 'max'
+
     try:
-        data = yf.download(macro_ticker_list, period='max', interval='1d')['Close']
+        data = yf.download(macro_ticker_list, **download_params)['Close']
         return data
     except Exception as e:
         print(f"ERROR while fetching macro data: {e}")
         return pd.DataFrame()
+
+def get_rss_feeds():
+    feeds = {
+        'Investing_Stock': 'https://www.investing.com/rss/stock.rss',
+        'Investing_News': 'https://www.investing.com/rss/news.rss',
+        'Yahoo_Finance': 'https://finance.yahoo.com/rss/topstories',
+        'Financial_Times': 'https://www.ft.com/rss/home/international',
+        'Fortune_News': 'https://fortune.com/feed/fortune-feeds/?id=3230629'
+    }
+    return feeds
+
+def fetch_market_news_rss():
+    feeds = get_rss_feeds()
+    all_articles = []
+    print("Fetching news articles from RSS feeds...")
+
+    for source, url in tqdm(feeds.items(), desc="Loading RSS"):
+        try:
+            feed = feedparser.parse(url)
+            for entry in feed.entries:
+                if 'published_parsed' in entry and 'title' in entry:
+                    all_articles.append({
+                        'published_at': entry.published_parsed,
+                        'source_name': source,
+                        'headline': entry.title
+                    })
+        except Exception as e:
+            print(f"ERROR while fetching news articles from {url}: {e}")
+            continue
+    if not all_articles:
+        print("No news articles found. Exiting.")
+        return pd.DataFrame()
+
+    news_df = pd.DataFrame(all_articles)
+
+    news_df['published_at'] = pd.to_datetime(
+        news_df['published_at'].apply(lambda x: pd.Timestamp.fromtimestamp(mktime(x)) if x else pd.NaT),
+        utc=True
+    )
+
+    news_df = news_df.dropna(subset=['published_at', 'headline'])
+    news_df = news_df.drop_duplicates(subset=['headline', 'published_at'])
+
+    print(f"Fetched {len(news_df)} unique headlines.")
+    return news_df

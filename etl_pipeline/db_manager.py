@@ -64,3 +64,17 @@ def create_macro_table():
         ))
 
     print("Table 'macro_data_daily' created successfully!")
+
+def create_news_table():
+    with engine.begin() as connection:
+        connection.execute(text("""
+            CREATE TABLE IF NOT EXISTS market_news
+            (
+                id           SERIAL PRIMARY KEY,
+                published_at TIMESTAMPTZ NOT NULL,
+                source_name  VARCHAR(100),
+                headline     TEXT        NOT NULL,
+                CONSTRAINT unique_headline_time UNIQUE (published_at, headline)
+            );
+        """))
+    print("Table 'market_news' created successfully!")
