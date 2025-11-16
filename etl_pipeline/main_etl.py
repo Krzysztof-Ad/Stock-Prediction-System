@@ -130,7 +130,7 @@ def run_full_etl():
         all_macro_data = pd.DataFrame()
     elif macro_start_date is None:
         # No data exists, download full history
-        all_macro_data = fetch_macro_data(ticker_list, start_date=None)
+        all_macro_data = fetch_macro_data(macro_ticker_list, start_date=None)
     else:
         # Incremental update: download from the next date after latest in DB
         all_macro_data = fetch_macro_data(macro_ticker_list, macro_start_date)
