@@ -15,7 +15,7 @@ from .db_manager import get_db_engine, create_tables, create_macro_table, create
 from .extractors import get_sp500_tickers, fetch_macro_data, fetch_stock_data, get_macro_tickers, fetch_market_news_rss
 from tqdm import tqdm
 from sqlalchemy import text
-from datetime import datetime, time
+from datetime import time
 
 def get_next_start_date(table_name, engine):
     """
@@ -51,12 +51,12 @@ def get_next_start_date(table_name, engine):
                 return 'UP_TO_DATE'
 
             # Calculate next date to fetch (day after the latest date in DB)
-            start_date = (result + pd.Timedelta(days=1)).strftime('%Y-%m-%d')
+            start_date = (last_date_in_db + pd.Timedelta(days=1)).strftime('%Y-%m-%d')
             print(f"Found latest data in {table_name}. Starting download at {start_date}.")
             return start_date
         else:
             # No data in table, trigger full historical download
-            print(f"No data found in {table_name}. Starting full dowload (period='max').")
+            print(f"No data found in {table_name}. Starting full download (period='max').")
             return None
     except Exception as e:
         print(f"ERROR checking MAX(time) for {table_name}: {e}. Starting full download (period='max').")
@@ -175,13 +175,40 @@ def run_full_etl():
         # Remove rows with missing essential price data
         final_data = final_data.dropna(subset=['open', 'close', 'high', 'low'])
 
+        # Drop exact duplicates (same symbol and timestamp) that may come from retries
+        final_data = final_data.drop_duplicates(subset=['time', 'symbol_id'])
+
+        # Pull the latest timestamp per symbol already stored in the DB so we only insert new rows
+        last_dates = pd.read_sql(
+            "SELECT symbol_id, MAX(time) as last_time FROM stock_data_daily GROUP BY symbol_id",
+            engine
+        )
+
+        last_dates_dict = dict(zip(last_dates['symbol_id'], last_dates['last_time']))
+
+        # Keep only the rows that are strictly newer than what we already have for each symbol
+        final_data = final_data[final_data.apply(
+            lambda row: row['time'] > last_dates_dict.get(row['symbol_id'], pd.Timestamp('1970-01-01')),
+            axis=1
+        )]
+
+
         # Save to database in chunks to avoid memory issues
         print(f"Saving {len(final_data)} rows of data to database...")
         try:
             chunksize = 10000  # Process 10k rows at a time
             for start in tqdm(range(0, len(final_data), chunksize), desc="Uploading to DB"):
                 chunk = final_data.iloc[start:start + chunksize]
-                chunk.to_sql('stock_data_daily', engine, if_exists='append', index=False, method='multi')
+
+                # Commit each chunk independently so partial progress persists
+                with engine.begin() as connection:
+                    chunk.to_sql(
+                        'stock_data_daily',
+                        connection,
+                        if_exists='append',
+                        index=False,
+                        method='multi'
+                    )
             print(f"Saving {len(final_data)} rows of data was successful!")
         except Exception as e:
             print("Could not finish saving data due to error:", e)
@@ -199,16 +226,38 @@ def run_full_etl():
         # Ensure timestamps are in UTC
         all_macro_data_stacked['time'] = pd.to_datetime(all_macro_data_stacked['time'], utc=True)
 
+        # Drop duplicate ticker/timestamp combinations that can arise when re-fetching data
+        all_macro_data_stacked = all_macro_data_stacked.drop_duplicates(subset=['time', 'ticker'])
+
+        # Fetch the last stored timestamp per macro ticker to ensure we only append new rows
+        last_macro = pd.read_sql(
+            "SELECT ticker, MAX(time) as last_time FROM macro_data_daily GROUP BY ticker",
+            engine
+        )
+        last_macro_dict = dict(zip(last_macro['ticker'], last_macro['last_time']))
+
+        # Keep only rows newer than the last stored timestamp for each ticker
+        all_macro_data_stacked = all_macro_data_stacked[
+            all_macro_data_stacked.apply(
+                lambda row: row['time'] > last_macro_dict.get(row['ticker'], pd.Timestamp('1970-01-01')),
+                axis=1
+            )
+        ]
+
         print(f"Saving {len(all_macro_data_stacked)} macro data to database...")
         try:
-            all_macro_data_stacked.to_sql(
-                'macro_data_daily',
-                engine,
-                if_exists='append',
-                index=False,
-                method='multi',
-                chunksize=5000  # Process 5k rows at a time
-            )
+            chunksize = 5000
+            for start in tqdm(range(0, len(all_macro_data_stacked), chunksize), desc="Uploading macro data"):
+                chunk = all_macro_data_stacked.iloc[start:start + chunksize]
+
+                with engine.begin() as connection:
+                    chunk.to_sql(
+                        'macro_data_daily',
+                        con=connection,
+                        if_exists='append',
+                        index=False,
+                        method='multi'
+                    )
             print(f"Saving {len(all_macro_data_stacked)} macro data to database was successful.")
         except Exception as e:
             print(f"Could not finish saving macro data due to error: {e}")

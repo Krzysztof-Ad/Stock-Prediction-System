@@ -109,6 +109,7 @@ soupsieve==2.8
 SQLAlchemy==2.0.44
 stack-data==0.6.3
 stocksymbol==0.0.5
+ta==0.11.0
 terminado==0.18.1
 threadpoolctl==3.6.0
 tinycss2==1.4.0

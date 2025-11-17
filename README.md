@@ -17,8 +17,8 @@ The main objective is to build a complete system that:
 ## Current Focus
 
 We are currently in **Phase 2: Feature Engineering**:
-* [ ] Build a new (`feature_pipeline`) to read data from the (`stock_data_daily`) table.
-* [ ] **Time-Series Features**: Generate technical indicators and lagged returns for all 500 stocks.
+* [x] Build a new (`feature_pipeline`) to read data from the (`stock_data_daily`) table.
+* [x] **Time-Series Features**: Generate technical indicators and lagged returns for all 500 stocks.
 * [ ] **Sentiment Features**: Analyze headlines from the (`market_news`) table and create a daily sentiment score.
 * [ ] **Cross-Sectional Features**: Calculate relative strength vs sector and market-wide feature rankings.
 * [ ] Save all computed features to the new (`stock_data_features`) table.
