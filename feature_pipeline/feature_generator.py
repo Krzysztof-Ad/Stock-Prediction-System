@@ -17,7 +17,6 @@ from sqlalchemy import text
 from tqdm import tqdm
 import warnings
 from ta import add_all_ta_features
-from ta.utils import dropna
 from etl_pipeline.db_manager import create_or_migrate_feature_table, get_db_engine
 
 # Silence noisy warnings from TA library and pandas when processing large frames
