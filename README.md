@@ -16,15 +16,13 @@ The main objective is to build a complete system that:
 
 ## Current Focus
 
-We are currently in **Phase 2: Feature Engineering**:
-* [x] Build a new (`feature_pipeline`) to read data from the (`stock_data_daily`) table.
-* [x] **Time-Series Features**: Generate technical indicators and lagged returns for all 500 stocks.
-* [ ] **Sentiment Features**: Analyze headlines from the (`market_news`) table and create a daily sentiment score.
-* [ ] **Cross-Sectional Features**: Calculate relative strength vs sector and market-wide feature rankings.
-* [ ] Save all computed features to the new (`stock_data_features`) table.
+We are currently in **Phase 3: Large-Scale Modeling**:
+* [ ] Dataset Assembly: Merge technical features, sentiment scores, and macro data into a single training set.
+* [ ] Model Training: Train machine learning models (e.g. XGBoost).
+* [ ] Evaluation: Test model performance using robust backtesting strategies to ensure reliability.
 
 ## Achievements
-**Phase 1: Data Universe (ETL pipeline)**
+**Phase 1: Data Universe (ETL pipeline)**:
 
 * [x] Setup PostgreSQL + TimescaleDB using Docker.
 * [x] Build etl_pipeline to fetch S&P 500 tickers (from Wikipedia).
@@ -32,3 +30,10 @@ We are currently in **Phase 2: Feature Engineering**:
 * [x] Add macro data extractor.
 * [x] Add news data extractor (RSS).
 * [x] Implement delta load to only account for fresh data.
+
+**Phase 2: Feature Engineering**:
+* [x] Build a new (`feature_pipeline`) to read data from the (`stock_data_daily`) table.
+* [x] Time-Series Features: Generate technical indicators and lagged returns for all 500 stocks.
+* [x] Sentiment Features: Analyze headlines from the (`market_news`) table and create a daily sentiment score.
+* [ ] Cross-Sectional Features: Calculate relative strength vs sector and market-wide feature rankings. *(Skipped for initial model iteration)*
+* [x] Save all computed features to the new (`stock_data_features`) table.
