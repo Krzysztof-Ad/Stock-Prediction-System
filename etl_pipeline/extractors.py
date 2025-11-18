@@ -192,7 +192,7 @@ def fetch_macro_data(macro_ticker_list, start_date=None):
 
     try:
         # Download data and extract only the 'Close' column
-        data = yf.download(macro_ticker_list, **download_params)['Close']
+        data = yf.download(macro_ticker_list, **download_params, auto_adjust=True)['Close']
         return data
     except Exception as e:
         print(f"ERROR while fetching macro data: {e}")
