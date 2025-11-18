@@ -195,5 +195,32 @@ def create_or_migrate_feature_table(template_df):
         conn.execute(text(
             "SELECT create_hypertable('stock_data_features', 'time', if_not_exists => TRUE);"
         ))
-
     print("Feature table created / migrated successfully!")
+
+
+def create_sentiment_table():
+    """
+    Creates the `sentiment_daily` table for storing aggregated news sentiment.
+
+    Each row stores the average sentiment score for a ticker on a given day,
+    sourced from a particular news provider, and is indexed for time-series queries.
+    """
+    with engine.begin() as connection:
+        # Ensure TimescaleDB is available for hypertable support
+        connection.execute(text("CREATE EXTENSION IF NOT EXISTS timescaledb;"))
+        # Store daily sentiment aggregates per ticker/source pair
+        connection.execute(text("""
+            CREATE TABLE IF NOT EXISTS sentiment_daily
+            (
+                date                TIMESTAMPTZ NOT NULL,
+                ticker              VARCHAR(20) NOT NULL,
+                source_name          VARCHAR(100) NOT NULL,
+                avg_sentiment_score DOUBLE PRECISION,
+                article_count       INTEGER     NOT NULL,
+                PRIMARY KEY (date, ticker)
+            );
+        """))
+        connection.execute(text(
+            "SELECT create_hypertable('sentiment_daily', 'date', if_not_exists => TRUE);"
+        ))
+    print("Table 'sentiment_daily' created successfully!")
