@@ -7,6 +7,7 @@ machine learning models. It also generates the target variable (whether stock pr
 """
 
 import pandas as pd
+import numpy as np
 from etl_pipeline.db_manager import get_db_engine
 
 
@@ -52,7 +53,7 @@ def load_sentiment_features(engine):
     return df.set_index('time')
 
 
-def prepare_training_dataset(limit=None):
+def prepare_training_dataset(limit=None, target_threshold=0.005):
     engine = get_db_engine()
 
     # Load macro and sentiment data (these are market-wide, same for all stocks)
@@ -77,6 +78,19 @@ def prepare_training_dataset(limit=None):
     # Make sure time is in datetime format
     df['time'] = pd.to_datetime(df['time'], utc=True)
 
+    print("Generating cycle features...")
+    # Day of week encoding (sine/cosine for cyclical representation)
+    df['day_of_week'] = df['time'].dt.dayofweek
+    df['day_sin'] = np.sin(df['day_of_week'] * (2 * np.pi / 5))
+    df['day_cos'] = np.cos(df['day_of_week'] * (2 * np.pi / 5))
+
+    # Month of year encoding
+    df['month'] = df['time'].dt.month
+    df['month_sin'] = np.sin((df['month'] - 1) * (2 * np.pi / 12))
+    df['month_cos'] = np.cos((df['month'] - 1) * (2 * np.pi / 12))
+
+    df = df.drop(columns=['day_of_week', 'month'])
+
     # Add macro indicators to our dataset
     # Left join means: keep all stock data, add macro data where dates match
     print("Merging with macro data...")
@@ -91,18 +105,17 @@ def prepare_training_dataset(limit=None):
     df['Sentiment_Score'] = df['Sentiment_Score'].fillna(0)
     df['Sentiment_Count'] = df['Sentiment_Count'].fillna(0)
 
-    # Now create the target variable: will the price go up tomorrow?
-    print("Generating target data...")
-    # Sort by stock and time so we can look ahead properly
+    # Create binary target: will price go up tomorrow?
+    print(f"Generating target data (Threshold={target_threshold*100}%)...")
     df = df.sort_values(['symbol_id', 'time'])
 
     # For each stock, get tomorrow's closing price
     # shift(-1) means "get the next row's value" (tomorrow's price)
     df['Next_Close'] = df.groupby('symbol_id')['price_close'].shift(-1)
 
-    # Create binary target: 1 if price goes up, 0 if it goes down or stays same
-    # This is what we want to predict
-    df['Target'] = (df['Next_Close'] > df['price_close']).astype(int)
+    df['Next_Return'] = (df['Next_Close'] - df['price_close']) / df['price_close']
+
+    df['Target'] = (df['Next_Return'] > target_threshold).astype(int)
 
     # Remove rows where we don't have tomorrow's price (can't create target for last day)
     df = df.dropna(subset=['Next_Close'])
