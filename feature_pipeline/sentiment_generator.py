@@ -41,18 +41,6 @@ def run_sentiment_analysis():
         return
 
     if news_df.empty:
-        print("No fresh news data to analyze.")
-        return
-
-    # If that pull came up empty, grab the whole news table
-    print("Loading news headlines from database...")
-    try:
-        news_df = pd.read_sql("SELECT published_at, headline FROM market_news", engine)
-    except Exception as e:
-        print(f"Error fetching news: {e}")
-        return
-
-    if news_df.empty:
         print("No news found. Run ETL first...")
         return
 
@@ -86,9 +74,13 @@ def run_sentiment_analysis():
     # Handle the headlines in small batches so memory stays stable
     for i in tqdm(range(0, len(headlines), batch_size), desc="FinBERT Processing"):
         batch = headlines[i:i + batch_size]
-        predictions = sentiment_pipeline(batch)
-        for pred in predictions:
-            results.append(label_map[pred['label']] * pred['score'])
+        try:
+            predictions = sentiment_pipeline(batch, truncation=True, max_length=512)
+            for pred in predictions:
+                results.append(label_map[pred['label']] * pred['score'])
+        except Exception as e:
+            print(f"Error in batch {i}: {e}")
+            results.extend([0.0] * len(batch))
 
     news_df['sentiment_score'] = results
 
@@ -103,11 +95,11 @@ def run_sentiment_analysis():
     daily_sentiment['ticker'] = 'SP500'
     daily_sentiment['source_name'] = 'RSS_Aggregated'
 
-    print(f"Saving sentiment analysis results to database...")
+    print(f"Saving {len(daily_sentiment)} daily summaries to database...")
 
     # Count how many daily rows we successfully saved
     success_count = 0
-    for index, row in tqdm(daily_sentiment.iterrows(), total=len(daily_sentiment), desc="Saving sentiment analysis"):
+    for index, row in tqdm(daily_sentiment.iterrows(), total=len(daily_sentiment), desc="Saving to DB"):
         try:
             pd.DataFrame([row]).to_sql('sentiment_daily', engine, if_exists='append', index=False)
             success_count += 1
