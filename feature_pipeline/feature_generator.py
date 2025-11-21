@@ -27,7 +27,7 @@ warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning)
 # Easy toggle for working on a few tickers.
 TEST_MODE = False
 # Run only this many when TEST_MODE is True.
-TEST_TICKER_COUNT = 6
+TEST_TICKER_COUNT = 3
 
 def get_last_feature_dates_map(engine):
     """
@@ -56,28 +56,41 @@ def get_feature_template(engine, symbol_id_for_template):
                         SELECT time, open, high, low, close, volume
                             FROM stock_data_daily
                             WHERE symbol_id = :id
-                            --ORDER BY time ASC
+                            ORDER BY time ASC
                         """)
     df_template = pd.read_sql(sql_template, engine, params={"id": int(symbol_id_for_template)}, index_col="time")
     # Drop gaps so the template stays clean.
     df_template = df_template.dropna().copy()
     if df_template.empty or len(df_template) < 50:
         raise ValueError(f"Not enough data for template symbol {symbol_id_for_template} to generate features.")
+
     # Let `ta` fill every indicator it knows.
     add_all_ta_features(
         df_template, open="open", high="high", low="low", close="close", volume="volume", fillna=True
     )
+
+    # We identify non-OHLCV columns (the features) and shift them by 1.
+    # This ensures row T contains indicators calculated from data up to T-1.
+    ohlcv_cols = ['open', 'high', 'low', 'close', 'volume']
+    feature_cols = [c for c in df_template.columns if c not in ohlcv_cols]
+    df_template[feature_cols] = df_template[feature_cols].shift(1)
+
     # Quick daily return for our lag features.
     df_template['Daily_Return'] = df_template['close'].pct_change()
+
     lag_features_list = []
     for lag in range(1, 11):
         lag_name = f"Lag_Return_{lag}"
         lag_series = df_template['Daily_Return'].shift(lag).rename(lag_name)
         lag_features_list.append(lag_series)
+
     # Glue lag columns next to the TA set.
     df_template = pd.concat([df_template] + lag_features_list, axis=1)
-    # We only want engineered features, so drop raw OHLCV.
+
+    # We only want engineered features, so drop raw OHLCV and temp column.
     df_template = df_template.drop(columns=['open', 'high', 'low', 'close', 'volume', 'Daily_Return'])
+
+    # Drop NaNs created by shifting
     df_template = df_template.dropna().copy()
     df_template = df_template.sort_values("time")
 
@@ -102,16 +115,32 @@ def generate_features_for_df(df, symbol_id):
     """
     # Don't mutate caller data.
     df = df.copy()
+
     # Same TA sweep as the template.
     add_all_ta_features(
         df, open="open", high="high", low="low", close="close", volume="volume", fillna=True
     )
+
+    ohlcv_cols = ['open', 'high', 'low', 'close', 'volume']
+    feature_cols = [c for c in df.columns if c not in ohlcv_cols]
+    df[feature_cols] = df[feature_cols].shift(1)
+
     # Daily returns feed the lags.
     returns = df["close"].pct_change()
+    lag_features_list = []
     for lag in range(1, 11):
-        df[f"Lag_Return_{lag}"] = returns.shift(lag)
-    # Trim rows with NaNs from long windows.
+        lag_name = f"Lag_Return_{lag}"
+        lag_series = returns.shift(lag).rename(lag_name)
+        lag_features_list.append(lag_series)
+
+    df = pd.concat([df] + lag_features_list, axis=1)
+
+    # Trim rows with NaNs from long windows and shifts.
     df = df.dropna()
+
+    # Drop raw columns before returning
+    df = df.drop(columns=ohlcv_cols)
+
     df["symbol_id"] = symbol_id
     df = df.reset_index()
     return df
@@ -170,33 +199,48 @@ def run_feature_generator():
                 if last_times_map.get(symbol_id) is None:
                     all_features_dfs.append(template_df)
                 continue
+
             last_time = last_times_map.get(symbol_id)
-            print(f"Last feature timestamp for {ticker}: {last_time}")
 
-            # Pull ~500 days so long TA windows have context.
-            sql_loop = text("""
-                            SELECT time, open, high, low, close, volume
-                            FROM stock_data_daily
-                            WHERE symbol_id = :id
-                            AND time >= (NOW() - INTERVAL '500 days')
-                            ORDER BY time ASC
-                            """)
-            params = {'id': int(symbol_id)}
+            if last_time:
+                query_str = """
+                        SELECT time, open, high, low, close, volume
+                        FROM stock_data_daily
+                        WHERE symbol_id = :id
+                        AND time >= (CAST(:last_time AS TIMESTAMPTZ) - INTERVAL '500 days')
+                        ORDER BY time ASC
+                    """
+                params = {'id': int(symbol_id), 'last_time': last_time}
+            else:
+                query_str = """
+                        SELECT time, open, high, low, close, volume
+                        FROM stock_data_daily
+                        WHERE symbol_id = :id
+                        ORDER BY time ASC
+                    """
+                params = {'id': int(symbol_id)}
 
-            df = pd.read_sql(sql_loop, engine, params=params, index_col='time')
+            df = pd.read_sql(text(query_str), engine, params=params, index_col='time')
+
+            if df.empty or len(df) < 50:
+                continue
+
             df = df.sort_index()
             features_df = generate_features_for_df(df, symbol_id)
-            # Skip anything already in the DB.
-            last_time = last_times_map.get(symbol_id)
+
             if last_time is not None:
                 features_df = features_df[features_df["time"] > last_time]
-            # Avoid dup rows if ETL overlapped data.
+
             features_df = features_df.drop_duplicates(subset=["symbol_id", "time"])
+
             if not features_df.empty:
                 missing_cols = [c for c in template_df.columns if c not in features_df.columns]
                 if missing_cols:
-                    raise ValueError(f"Missing columns for {ticker}: {missing_cols}")
+                    for c in missing_cols:
+                        features_df[c] = None
+
                 all_features_dfs.append(features_df[template_df.columns])
+
         except Exception as e:
             print(f"\nERROR during feature generation for {ticker} (ID: {symbol_id}): {e}")
             continue

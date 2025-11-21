@@ -23,7 +23,7 @@ from model_pipeline.data_prep import prepare_training_dataset
 warnings.filterwarnings("ignore")
 
 # Set to True to see detailed debugging info about data leakage
-debug_mode = True
+DEBUG_MODE = False
 
 def generate_time_weights(df, time_col, min_weight=0.4):
     """
@@ -198,7 +198,7 @@ if __name__ == '__main__':
     time_weights = generate_time_weights(df, 'time', min_weight=0.5)
 
     # Debug mode shows detailed info about the data and potential issues
-    if debug_mode:
+    if DEBUG_MODE:
         print("\n=== DEBUGGING DATA LEAKAGE ===")
         print(f"Total rows: {len(df)}")
         print(f"Target distribution: {y.value_counts().to_dict()}")
