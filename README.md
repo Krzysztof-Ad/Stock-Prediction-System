@@ -18,7 +18,7 @@ The main objective is to build a complete system that:
 
 We are currently in **Phase 3: Large-Scale Modeling**:
 * [x] Dataset Assembly: Merge technical features, sentiment scores, and macro data into a single training set.
-* [ ] Model Training: Train machine learning models (e.g. XGBoost).
+* [x] Model Training: Train machine learning models (e.g. XGBoost).
 * [ ] Evaluation: Test model performance using robust backtesting strategies to ensure reliability.
 
 ## Achievements
